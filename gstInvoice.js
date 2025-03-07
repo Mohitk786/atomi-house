@@ -5,7 +5,6 @@ const axios = require("axios");
 admin.initializeApp();
 const db = admin.firestore();
 
-
 const GST_RATE = 0.18;
 
 exports.generateGSTInvoice = functions.firestore
@@ -14,28 +13,31 @@ exports.generateGSTInvoice = functions.firestore
         const beforeData = change.before.data();
         const afterData = change.after.data();
 
-       
+        
         if (beforeData.status !== "finished" && afterData.status === "finished") {
             try {
-                const { name, totalAmount, state } = afterData;
+                const { name, totalAmount, originState, destinationState } = afterData;
 
+                
                 if (!totalAmount || totalAmount <= 0) {
                     console.error("Invalid booking amount.");
                     return;
                 }
 
-                const gstAmount = totalBookingAmount * GST_RATE;
+                // Calculate GST
+                const gstAmount = totalAmount * GST_RATE;
                 let igst = 0, cgst = 0, sgst = 0;
+
                 
-                if (state === "same") { 
+                if (originState && destinationState && originState === destinationState) {
                     cgst = gstAmount / 2;
                     sgst = gstAmount / 2;
                 } else {  
+                   
                     igst = gstAmount;
                 }
+
                 
-                
-                // Prepare invoice data
                 const invoiceData = {
                     name,
                     totalAmount,
@@ -46,15 +48,15 @@ exports.generateGSTInvoice = functions.firestore
                     timestamp: admin.firestore.Timestamp.now(),
                 };
 
-             
+              
                 await db.collection("invoices").doc(context.params.bookingId).set(invoiceData);
-
                 console.log("Invoice generated:", invoiceData);
 
-                const response = await axios.post("https://api.example.com/gst-filing", invoiceData, {
+               
+                const response = await axios.post("https://mastergst.com/gst-filing", invoiceData, {
                     headers: {
                         "Content-Type": "application/json",
-                    "Authorization": `Bearer ${process.env.GST_API_KEY}`
+                        "Authorization": `Bearer ${process.env.GST_API_KEY}`
                     }
                 });
 
